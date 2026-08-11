@@ -26,7 +26,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 
-const DEFAULT_FIRECRAWL_BASE_URL = "http://100.90.128.94:3002";
+const DEFAULT_FIRECRAWL_BASE_URL = "custom_firecrawl_url";
 
 function getFirecrawlBaseUrl(): string {
 	const configured =
