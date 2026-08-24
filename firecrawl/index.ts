@@ -11,8 +11,10 @@
  *   - firecrawl_crawl: Recursively gather content from entire sites (async)
  *
  * Setup:
- *   Set the FIRECRAWL_API_KEY environment variable, or use /firecrawl-key
- *   to configure it interactively.
+ *   Works out of the box against a self-hosted Firecrawl instance (no API key
+ *   needed). Set FIRECRAWL_BASE_URL to point at your instance, or use the
+ *   default. Optionally set FIRECRAWL_API_KEY (or run /firecrawl-key) if your
+ *   instance requires authentication.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -26,7 +28,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 
-const DEFAULT_FIRECRAWL_BASE_URL = "custom_firecrawl_url";
+const DEFAULT_FIRECRAWL_BASE_URL = "http://100.90.128.94:3002";
 
 function getFirecrawlBaseUrl(): string {
 	const configured =
@@ -40,23 +42,26 @@ function getFirecrawlBaseUrl(): string {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getApiKey(ctx: ExtensionContext): string | undefined {
-	return process.env.FIRECRAWL_API_KEY || ctx.modelRegistry.getApiKey("firecrawl");
+function getApiKey(_ctx?: ExtensionContext): string | undefined {
+	return process.env.FIRECRAWL_API_KEY;
 }
 
 async function firecrawlRequest(
 	path: string,
 	body: Record<string, unknown>,
-	apiKey: string,
+	apiKey?: string,
 	signal?: AbortSignal,
 ): Promise<{ ok: boolean; status: number; data: any }> {
 	const url = `${getFirecrawlBaseUrl()}${path}`;
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	if (apiKey) {
+		headers.Authorization = `Bearer ${apiKey}`;
+	}
 	const res = await fetch(url, {
 		method: "POST",
-		headers: {
-			Authorization: `Bearer ${apiKey}`,
-			"Content-Type": "application/json",
-		},
+		headers,
 		body: JSON.stringify(body),
 		signal,
 	});
@@ -77,14 +82,10 @@ function truncateOutput(raw: string, label: string): string {
 	return result;
 }
 
-function ensureApiKey(ctx: ExtensionContext): string {
-	const key = getApiKey(ctx);
-	if (!key) {
-		throw new Error(
-			"Firecrawl API key not configured. Set the FIRECRAWL_API_KEY environment variable or run /firecrawl-key.",
-		);
-	}
-	return key;
+function ensureApiKey(ctx: ExtensionContext): string | undefined {
+	// API key is optional: self-hosted Firecrawl instances typically don't
+	// require one. If set (env var or /firecrawl-key), it's sent as a Bearer token.
+	return getApiKey(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -665,7 +666,7 @@ export default function (pi: ExtensionAPI) {
 					pollCount++;
 
 					const pollRes = await fetch(pollUrl, {
-						headers: { Authorization: `Bearer ${apiKey}` },
+						headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
 						signal,
 					});
 					const pollData = await pollRes.json();
